@@ -1,5 +1,20 @@
-*.log
-*.db
-*.sqlite
-*.bak
-*.swp
+# Não versionar coisas do sistema / builds
+/usr/src/
+/var/
+/run/
+/tmp/
+
+# Asterisk runtime (se alguém copiar sem querer)
+spool/
+logs/
+recordings/
+*.wav
+*.mp3
+*.gsm
+*.ulaw
+
+# Chaves / credenciais
+*.key
+*.pem
+*.crt
+*.secret
