@@ -210,7 +210,7 @@ foreach ($agents as $ag) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta http-equiv="refresh" content="5" />
-  <title>Painel Mototáxi - Asterisk</title>
+  <title>Painel - Pedi Tudo Cornélio</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 16px; background:#0b0d12; color:#e9eef7; }
     h1 { margin: 0 0 6px 0; font-size: 20px; }
@@ -235,7 +235,7 @@ foreach ($agents as $ag) {
   </style>
 </head>
 <body>
-  <h1>Painel Mototáxi (Asterisk / AstDB)</h1>
+  <h1>PEDI TUDO CORNÉLIO</h1>
   <div class="sub">Atualiza a cada 5s • <?= htmlspecialchars(date('d/m/Y H:i:s')) ?></div>
 
   <?php
@@ -249,7 +249,6 @@ foreach ($agents as $ag) {
     <div class="card"><div class="k">Logados</div><div class="v"><?= $countLogged ?></div></div>
     <div class="card"><div class="k">Em corrida</div><div class="v"><?= $countRide ?></div></div>
     <div class="card"><div class="k">Offline</div><div class="v"><?= $countOffline ?></div></div>
-    <div class="card"><div class="k">Fila taxi/line</div><div class="v mono"><?= htmlspecialchars($taxi_line ?: '-') ?></div></div>
   </div>
 
   <table>
@@ -298,7 +297,7 @@ foreach ($agents as $ag) {
         <tr>
           <td>
             <div><strong><?= htmlspecialchars($r['nome']) ?></strong></div>
-            <div class="muted mono">Ramal: <?= htmlspecialchars($r['ag']) ?></div>
+            <div class="muted mono">ID: <?= htmlspecialchars($r['ag']) ?></div>
           </td>
           <td><?= $statusPill ?></td>          
           <td><?= $locBase ?></td>
@@ -310,5 +309,7 @@ foreach ($agents as $ag) {
     </tbody>
   </table>
 
+	<a class="btn" href="/painel/cadastro.php">Cadastro de Agentes</a>
+	<a class="btn" href="/painel/calls.php">Ligações</a>
 </body>
 </html>
