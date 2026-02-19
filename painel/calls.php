@@ -14,7 +14,7 @@ $REFRESH_SECONDS = 5;
 // Se você usa sudoers pro www-data:
 //   www-data ALL=(root) NOPASSWD: /usr/sbin/asterisk
 // então deixe $USE_SUDO=true
-$USE_SUDO = false;
+$USE_SUDO = true;
 
 // Limite de linhas do "database show" pra não explodir página em produção
 $MAX_ROWS = 5000;
@@ -162,7 +162,6 @@ foreach ($list as $r) {
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="<?= (int)$REFRESH_SECONDS ?>">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Painel - Chamadas</title>
   <style>
@@ -197,7 +196,7 @@ foreach ($list as $r) {
   <div class="topbar">
     <div>
       <h1>Painel de Chamadas</h1>
-      <div class="sub">Atualiza a cada <?= (int)$REFRESH_SECONDS ?>s • <?= h(date('Y-m-d H:i:s')) ?></div>
+	<div class="sub">Atualiza a cada <?= (int)$REFRESH_SECONDS ?>s • <span id="now"><?= h(date('Y-m-d H:i:s')) ?></span></div>
     </div>
     <div>
       <a class="btn" href="./index.php">← Voltar ao Painel</a>
@@ -214,11 +213,23 @@ foreach ($list as $r) {
     </div>
   <?php endif; ?>
 
-  <div class="cards">
-    <div class="card"><div class="k">Recebidas (total)</div><div class="v"><?= (int)$total ?></div></div>
-    <div class="card"><div class="k">Atendidas</div><div class="v"><?= (int)$atendidas ?></div></div>
-    <div class="card"><div class="k">Abandonadas/NoAnswer</div><div class="v"><?= (int)$abandonadas ?></div></div>
-  </div>
+<div class="cards">
+    <div class="card">
+        <div class="k">Recebidas (total)</div>
+        <div class="v" id="cnt-total"><?= (int)$total ?></div>
+    </div>
+
+    <div class="card">
+        <div class="k">Atendidas</div>
+        <div class="v" id="cnt-atendidas"><?= (int)$atendidas ?></div>
+    </div>
+
+    <div class="card">
+        <div class="k">Abandonadas/NoAnswer</div>
+        <div class="v" id="cnt-abandonadas"><?= (int)$abandonadas ?></div>
+    </div>
+</div>
+
 
   <table>
     <thead>
@@ -232,7 +243,7 @@ foreach ($list as $r) {
         <th>CALLID</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="calls-body">
       <?php if (!$list): ?>
         <tr>
           <td colspan="7" style="background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px;opacity:.8">
@@ -253,8 +264,28 @@ foreach ($list as $r) {
             <td class="mono"><?= h((string)($r['agente'] ?? '-')) ?></td>
             <td class="mono"><?= h((string)($r['base'] ?? '-')) ?></td>
             <td><span class="pill <?= h($class) ?>"><?= h($st ?: 'RECEBIDA') ?></span></td>
-            <td class="mono"><?= h((string)($r['dur_calc'] ?? 0)) ?>s</td>
-            <td class="mono"><?= h((string)($r['callid'] ?? '')) ?></td>
+	    <td class="mono"><?= h((string)($r['dur_calc'] ?? 0)) ?>s</td>
+
+<td>
+  <?php
+    $rec = (string)($r['rec_file'] ?? '');
+    if ($rec !== '') {
+      $file = basename($rec);
+      $url  = "/monitor/" . rawurlencode($file);
+
+      // Play embutido + Download
+      echo '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+      echo '<audio controls preload="none" style="height:28px;width:220px" src="' . h($url) . '"></audio>';
+      echo '<a class="btn" href="' . h($url) . '" download>⬇️ WAV</a>';
+      echo '</div>';
+    } else {
+      echo '<span style="opacity:.6">-</span>';
+    }
+  ?>
+</td>
+
+<td class="mono"><?= h((string)($r['callid'] ?? '')) ?></td>
+
           </tr>
         <?php endforeach; ?>
       <?php endif; ?>
@@ -265,5 +296,87 @@ foreach ($list as $r) {
     Fonte: <span class="mono">asterisk -rx "database show taxi/calls"</span>
   </div>
 </div>
+
+<script>
+(function(){
+  const REFRESH_MS = <?= (int)$REFRESH_SECONDS ?> * 1000;
+
+  function anyAudioPlaying(){
+    return Array.from(document.querySelectorAll('audio')).some(a => !a.paused && !a.ended);
+  }
+
+  function pillClass(st){
+    st = (st || '').toUpperCase();
+    if (['ATENDIDA','ANSWER','ANSWERED','ENCERRADA'].includes(st)) return 'st-atendida';
+    if (['ABANDONADA','ABANDON','NOANSWER','TIMEOUT','NAO_ATENDIDA'].includes(st)) return 'st-abandonada';
+    return 'st-recebida';
+  }
+
+  function esc(s){
+    return (s ?? '').toString()
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'",'&#039;');
+  }
+
+  function fmtEpoch(epoch){
+    const n = parseInt(epoch, 10);
+    if (!n) return '-';
+    const d = new Date(n * 1000);
+    const pad = (x)=> String(x).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  async function refresh(){
+    if (anyAudioPlaying()) return; // não atrapalha o playback
+    try {
+      const r = await fetch('./calls_data.php', {cache:'no-store'});
+      const j = await r.json();
+      if (!j.ok) return;
+
+      document.getElementById('now').textContent = j.now;
+      document.getElementById('cnt-total').textContent = j.counts.total;
+      document.getElementById('cnt-atendidas').textContent = j.counts.atendidas;
+      document.getElementById('cnt-abandonadas').textContent = j.counts.abandonadas;
+
+      const body = document.getElementById('calls-body');
+      body.innerHTML = j.rows.map(row => {
+        const st = (row.status || '').toUpperCase();
+        const cls = pillClass(st);
+        let audioHtml = '-';
+        if (row.rec_file) {
+          const file = row.rec_file.split('/').pop();
+          const url = '/monitor/' + encodeURIComponent(file);
+          audioHtml = `
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <audio controls preload="none" style="height:28px;width:220px" src="${esc(url)}"></audio>
+              <a class="btn" style="padding:6px 10px;border-radius:10px" href="${esc(url)}" download>⬇️ WAV</a>
+            </div>`;
+        }
+        const agente = row.agente_nome ? `${row.agente} (${row.agente_nome})` : (row.agente || '-');
+        return `
+          <tr>
+            <td class="mono">${esc(fmtEpoch(row.ts_start || row.start))}</td>
+            <td class="mono">${esc(row.cliente || row.cid || '-')}</td>
+            <td class="mono">${esc(agente)}</td>
+            <td class="mono">${esc(row.base || '-')}</td>
+            <td><span class="pill ${esc(cls)}">${esc(st || 'RECEBIDA')}</span></td>
+            <td class="mono">${esc(row.dur || '0')}s</td>
+            <td>${audioHtml}</td>
+            <td class="mono">${esc(row.callid || '')}</td>
+          </tr>`;
+      }).join('');
+    } catch(e) {
+      // silencioso
+    }
+  }
+
+  setInterval(refresh, REFRESH_MS);
+})();
+</script>
+
+
 </body>
 </html>
